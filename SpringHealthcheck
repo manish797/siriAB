@@ -1,0 +1,327 @@
+package com.siriab.healthcheck.demo;
+
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.TimeZone;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.HandlerInterceptor;
+import com.fasterxml.jackson.annotation.JsonFilter;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ser.impl.SimpleBeanPropertyFilter;
+import com.fasterxml.jackson.databind.ser.impl.SimpleFilterProvider;
+
+@SpringBootApplication
+public class DemoApplication {
+
+	
+	/*  REST CONTROLLER - START */
+	
+	
+	/*
+	 * Rest Controller providing the end points   /healthCheck/* for the application
+	 */
+	@RestController
+	public class HealthCheckEndPoints {
+
+		//  Injected HealthCheckService Service class for providing the back end support for Data Access
+		@Autowired
+		private HealthCheckService healthCheckService;
+
+		/*
+		 *  RequestGet Method 
+		 *  Support two type of reports 
+		 *   1. healthcheck?format=full  -> returns the status only
+		 *   2. healthcheck?format=short -> returns the time + status both
+		 *   NOTE : healthcheck?format=FULL  or healthcheck?format=SHORT , will not work as it is not explicitly called out
+		 *   in the requirement
+		 */
+		@RequestMapping(value = "healthcheck", method = RequestMethod.GET, produces = "application/json")
+		public @ResponseBody ResponseEntity<String> getHealth(@RequestParam("format") String formatId)
+				throws JsonProcessingException {
+
+			if (formatId != null && (formatId.equals("short") || formatId.equals("full"))) {
+
+				try {
+					HttpHeaders httpHeaders = new HttpHeaders();
+					httpHeaders.setContentType(MediaType.APPLICATION_JSON);
+					return new ResponseEntity<String>(healthCheckService.getHealthReport(formatId), httpHeaders,
+							HttpStatus.OK);
+				} catch (Exception e) {
+
+					throw new GeneralException();
+				}
+			} else {
+				throw new HealthReportNotfoundException();
+
+			}
+
+		}
+
+	}
+	
+	/*  REST CONTROLLER -END */
+	
+	
+	
+	/* REQUEST HANDLER CLASSES - START */
+    // Request Interceptor , to allow only the GET request and blocked others requests.
+	public class DemoInterceptor implements HandlerInterceptor {
+
+		@Override
+		public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
+				throws Exception {
+
+			String requestMethod = request.getMethod();
+
+			if (HttpMethod.GET.matches(requestMethod)) {
+
+				return true;
+			} else {
+
+				response.sendError(HttpStatus.METHOD_NOT_ALLOWED.value());
+				return false;
+			}
+		}
+	}
+	/* REQUEST HANDLER CLASSES - END */
+	
+	
+	
+	
+	/*  EXCEPTION CLASSES - START   */
+	public class HealthReportNotfoundException extends RuntimeException {
+		private static final long serialVersionUID = 1L;
+
+	}
+
+	public class GeneralException extends RuntimeException {
+		private static final long serialVersionUID = 1L;
+
+	}
+
+	/* Controller for Exception whose responsibility (registry for exception at global level) 
+	 *  to provide the exception classes interfaces and inject at the time of 
+	 exception occurred  */
+	
+	@ControllerAdvice
+	public class HealthReportExceptionController {
+
+		@ExceptionHandler(value = HealthReportNotfoundException.class)
+		public ResponseEntity<Object> exception(HealthReportNotfoundException exception) {
+			return new ResponseEntity<>("Report Type not found or provided as null", HttpStatus.BAD_REQUEST);
+		}
+
+		@ExceptionHandler(value = GeneralException.class)
+		public ResponseEntity<Object> exception(GeneralException exception) {
+			return new ResponseEntity<>(exception.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}	
+	/*  EXCEPTION CLASSES - END   */
+	
+	
+	
+	
+	
+	/*  SERVICE CLASSES - START   */
+	
+	// This is the Service class  providing the back end support for Data Access
+	@Service
+	public class HealthCheckService {
+        // Map to provide the dummy data for the entity class properties initialization
+		private Map<String, String> healthinitializeMap = new HashMap<>();
+
+		HealthCheckService() {
+
+			healthinitializeMap.put("status", "OK");
+			healthinitializeMap.put("currentTime", null);
+			healthinitializeMap.put("name", "suresh");
+		}
+        
+		// Method to provide the JSON string for the type of report
+		public String getHealthReport(String reportType) throws JsonProcessingException {
+			HealthCheckReport healthReport = null;
+			String jsonResponse = null;
+			healthReport = new HealthCheckReport();
+			healthReport.set(healthinitializeMap);
+			jsonResponse = convertObjectToString(formattedStringAfterApplyingDataFormatFilter(reportType),
+					healthReport);
+
+			return jsonResponse;
+
+		}
+		
+		
+		// Private Method to provide the SimpleFilterProvider filter with the type of data for the report
+		private SimpleFilterProvider formattedStringAfterApplyingDataFormatFilter(String dataFormat) {
+
+			SimpleFilterProvider filterProvider = new SimpleFilterProvider();
+			Set<String> properties = setJSONPersistsDataSet(dataFormat);
+			filterProvider.addFilter("healthFilter", SimpleBeanPropertyFilter.filterOutAllExcept(properties));
+
+			return filterProvider;
+
+		}
+
+		// Private method to provide the control over add/subtract  number of properties to be shown in the report type 
+		private Set<String> setJSONPersistsDataSet(String dataFormat) {
+			Set<String> properties = new HashSet<>();
+			if (dataFormat.equalsIgnoreCase("short")) {
+				properties.add("status");
+			} else if (dataFormat.equalsIgnoreCase("full")) {
+				properties.add("status");
+				properties.add("currentTime");
+				// properties.add("name");
+			}
+			return properties;
+
+		}
+
+		//  Private method to provide the conversion of the Entity Object and convert it to the JSON String
+		private String convertObjectToString(SimpleFilterProvider filterProvider, HealthCheckReport healthReport)
+				throws JsonProcessingException {
+			ObjectMapper mapper = new ObjectMapper();
+			mapper.setFilterProvider(filterProvider);
+			String jsonData = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(healthReport);
+			return jsonData;
+
+		}
+
+	}
+	/*  SERVICE CLASSES - END   */
+	
+	
+    /* POJO CLASSES AND INTERFACES - START */
+	
+	/* This is interface to provide flexibility to initialize the value of the entity variables  from external source
+	 *  for e.g. data  result set or  rest data from external system */
+	@FunctionalInterface
+	interface SetupValueToPojoFields {
+
+		void set(Object o);
+
+	}
+
+	// Base Entity for our application , with Json Filter associated  in order to have control over the 
+	// serializability of the properties of the entity
+	@JsonFilter("healthFilter")
+	class HealthCheckReport {
+
+		private Map<String, SetupValueToPojoFields> setPojoSetupValues = new HashMap<>();
+
+		@JsonProperty("currentTime")
+		String currentTime;
+		@JsonProperty("id")
+		String id;
+		@JsonProperty("status")
+		String status;
+		@JsonProperty("name")
+		String name;
+
+		HealthCheckReport() {
+
+			initValues();
+		}
+
+		
+		// initialize the properties of the entity through a map 
+		private void initValues() {
+			setPojoSetupValues.put("name", (o) -> this.setName(o.toString()));
+			setPojoSetupValues.put("status", (o) -> this.setStatus(o.toString()));
+			setPojoSetupValues.put("currentTime", (o) -> this.setCurrentTime(o.toString()));
+
+		}
+
+		
+		// Setting the values of the attributes from the external map 
+		public void set(Map<String, String> map) {
+			for (String s : map.keySet()) {
+				setField(s, map.get(s));
+			}
+		}
+        
+		// This private method employs logic for setting the fields of the entity
+		private void setField(String s, String string) {
+			if (s.equalsIgnoreCase("currentTime")) {
+                // Time selected as IST
+				TimeZone tz = TimeZone.getTimeZone("IST");
+				DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX");
+				df.setTimeZone(tz);
+				String nowAsISO = df.format(new Date());
+				this.setCurrentTime(nowAsISO);
+			} else {
+				setPojoSetupValues.get(s).set(string);
+			}
+
+		}
+
+		
+		public String getCurrentTime() {
+			return currentTime;
+		}
+
+
+		public void setCurrentTime(String currentTime) {
+			this.currentTime = currentTime;
+		}
+
+
+		public String getId() {
+			return id;
+		}
+
+		public void setId(String id) {
+			this.id = id;
+		}
+
+		public String getStatus() {
+			return status;
+		}
+
+		public void setStatus(String status) {
+			this.status = status;
+		}
+
+		public String getName() {
+			return name;
+		}
+
+		public void setName(String name) {
+			this.name = name;
+		}
+
+	}
+	 /* POJO CLASSES AND INTERFACES -END */
+
+	private DemoApplication getEnclosingInstance() {
+		return DemoApplication.this;
+	}
+
+	public static void main(String[] args) {
+		SpringApplication.run(DemoApplication.class, args);
+	}
+
+}
