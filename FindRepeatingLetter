@@ -1,0 +1,61 @@
+package interview.solid;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class Solution  {
+
+	public static void main(String[] args) {
+
+		String test = "codility";
+
+		// Using Array
+		System.out.println(solution1(test));
+		// Using Map
+		System.out.println(solution2(test));
+
+	}
+
+	private static char solution1(String test) {
+		Map<Character, Integer> countMap = new HashMap<>();
+		char duplicate = 0;
+		for (char c : test.toCharArray()) {
+			countMap.put(c, countMap.getOrDefault(c, 0) + 1);
+		}
+
+		for (Map.Entry<Character, Integer> mapEntry : countMap.entrySet()) {
+			if (mapEntry.getValue() > 1) {
+				duplicate = mapEntry.getKey();
+			}
+
+		}
+
+		return duplicate;
+	}
+
+	private static char solution2(String test) {
+		int[] arrayTest = new int[26];
+		int index = 0;
+		boolean found = false;
+		for (int i = 0; i < test.length(); i++) {
+			arrayTest[test.charAt(i) - 'a']++;
+
+		}
+
+		for (int i = 0; i < arrayTest.length; i++) {
+			if (arrayTest[i] > 1) {
+				index = i;
+				found = true;
+				break;
+			}
+
+		}
+
+		if (found) {
+			return ((char) (index + 'a'));
+		} else {
+			return 0;
+		}
+	}
+
+}
