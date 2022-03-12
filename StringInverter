@@ -1,0 +1,54 @@
+package interview.java.programs;
+
+import static org.junit.Assert.*;
+import org.junit.Test;
+
+public class Inverter {
+
+	@Test
+	public void InvertingStringAssertionsTest() {
+
+		final String emptyString = "";
+		final String singleCharString = "m";
+		final String multipleCharString = "acbd";
+		final String numericString = "1234";
+		final String alphanumericString = "abdn332";
+		final String nonCharString_1 = "-dhdhd";
+		final String string_withSpace = "dcdsc cdcds";
+        // Empty String input
+		assertEquals(emptyString, Inverter.invert(emptyString));
+		// NULL as input
+		assertEquals(emptyString, Inverter.invert(null));
+		// Numeric String e.g. 1234
+		assertEquals("4321", Inverter.invert(numericString));
+		// AlphaNumeric String e.g. abdn332
+		assertEquals("233ndba", Inverter.invert(alphanumericString));
+		// Illegal String e.g. : -dhdhd
+		assertEquals(emptyString, Inverter.invert(nonCharString_1));
+		// Single Char String for e.g. : "m"
+		assertEquals(singleCharString, Inverter.invert(singleCharString));
+		// Multiple Char String
+		assertEquals("dbca", Inverter.invert(multipleCharString));
+		// String with Space
+		assertEquals("sdcdc csdcd", Inverter.invert(string_withSpace));
+	}
+
+	// Recursive way of reversing a string
+	private static String invert(String name) {
+
+		if (name == null || name.isBlank()) {
+			return "";
+		}
+
+		if (!name.matches("^[a-zA-Z1-9 ]*$")) {
+			return "";
+		}
+
+		if (name.length() == 1) {
+			return name;
+		}
+
+		return invert(name.substring(1)) + name.charAt(0);
+	}
+
+}
